@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Build Log Filter - UE5/VS Build Log Cleaner</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔧 Build Log Filter</h1>
+            <p class="subtitle">Filter UE5/Visual Studio build logs before sharing with AI</p>
+        </header>
+
+        <main>
+            <!-- Options Panel -->
+            <div class="options-panel">
+                <div class="option-group">
+                    <label>
+                        <input type="checkbox" id="showWarnings" checked>
+                        Include warnings
+                    </label>
+                    <label>
+                        <input type="checkbox" id="useContext" checked>
+                        Add context lines
+                    </label>
+                </div>
+                <div class="option-group">
+                    <label>
+                        Context lines:
+                        <input type="number" id="contextLines" value="10" min="0" max="50">
+                    </label>
+                    <label>
+                        Format:
+                        <select id="formatSelect">
+                            <option value="full">Full (with context)</option>
+                            <option value="minimal">Minimal (errors only)</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="option-group file-filter-group">
+                    <label class="file-filter-label">
+                        <div class="file-filter-header">
+                            <span>Filter by file:</span>
+                            <div class="file-filter-actions">
+                                <button type="button" id="selectAllFiles" class="btn-small">All</button>
+                                <button type="button" id="clearFileFilter" class="btn-small">Clear</button>
+                            </div>
+                        </div>
+                        <div id="fileFilterList" class="file-filter-list">
+                            <span class="no-files-hint">No files detected yet</span>
+                        </div>
+                        <span class="hint">Select files to filter errors (empty = all files)</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Editor Panels -->
+            <div class="editors">
+                <!-- Input Panel -->
+                <div class="editor-panel">
+                    <div class="panel-header">
+                        <h2>📥 Input (Raw Build Log)</h2>
+                        <div class="header-actions">
+                            <button id="clearBtn" class="btn-secondary">Clear</button>
+                            <button id="pasteBtn" class="btn-primary">📋 Paste</button>
+                        </div>
+                    </div>
+                    <textarea
+                        id="inputLog"
+                        placeholder="Paste your Visual Studio or UE5 build log here...
+It will auto-filter instantly!
+
+Example:
+> Build started...
+> LCCharacterBase.cpp
+> error C2065: 'ULCStaminaComponent': undeclared identifier
+> warning C4101: 'unusedVar': unreferenced local variable
+> Build FAILED."
+                        spellcheck="false"
+                    ></textarea>
+                    <div class="panel-footer">
+                        <span id="inputStats">0 lines | 0 characters</span>
+                    </div>
+                </div>
+
+                <!-- Output Panel -->
+                <div class="editor-panel">
+                    <div class="panel-header">
+                        <h2>📤 Output (Filtered)</h2>
+                        <div class="header-actions">
+                            <button id="saveBtn" class="btn-secondary">💾 Save</button>
+                            <button id="copyBtn" class="btn-primary">📋 Copy</button>
+                        </div>
+                    </div>
+                    <textarea
+                        id="outputLog"
+                        placeholder="Filtered output will appear here...
+Ready to paste into Claude Code or any AI assistant."
+                        readonly
+                        spellcheck="false"
+                    ></textarea>
+                    <div class="panel-footer">
+                        <span id="outputStats">0 lines | 0 characters</span>
+                        <span id="filterStats"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Bar -->
+            <div class="action-bar">
+                <button id="filterBtn" class="btn-large btn-primary">
+                    🚀 Filter Log
+                </button>
+                <div class="action-info">
+                    <span id="status">Ready to filter</span>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Built for Last Courier: Ash & Rain | UE5 Build Tool Support</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
