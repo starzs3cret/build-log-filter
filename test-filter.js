@@ -7,6 +7,245 @@
 const fs = require('fs');
 
 /**
+ * Check if content is a Unity NUnit test result XML
+ */
+function isUnityTestXml(content) {
+    const trimmed = content.trim();
+    return trimmed.startsWith('<?xml') && trimmed.includes('<test-run') && trimmed.includes('testcasecount');
+}
+
+/**
+ * Filter Unity NUnit test result XML to extract failed tests
+ */
+function filterUnityTestResults(xmlContent, options = {}) {
+    const { showStackTraces = true, showOutput = true, maxErrors = 9999 } = options;
+
+    const lines = xmlContent.split('\n');
+    const failedTests = [];
+    const filesSet = new Set();
+    let totalTests = 0;
+    let passedTests = 0;
+    let failedTestsCount = 0;
+    let skippedTests = 0;
+
+    // Extract summary from test-run element
+    const summaryMatch = xmlContent.match(/<test-run[^>]*total="(\d+)"[^>]*passed="(\d+)"[^>]*failed="(\d+)"[^>]*skipped="(\d+)"/);
+    if (summaryMatch) {
+        totalTests = parseInt(summaryMatch[1]) || 0;
+        passedTests = parseInt(summaryMatch[2]) || 0;
+        failedTestsCount = parseInt(summaryMatch[3]) || 0;
+        skippedTests = parseInt(summaryMatch[4]) || 0;
+    }
+
+    // Find all failed test-case elements
+    let inFailedTestCase = false;
+    let currentTest = null;
+    let captureStack = false;
+    let captureOutput = false;
+    let currentIndent = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        // Detect start of a failed test case
+        if (trimmed.includes('<test-case') && trimmed.includes('result="Failed"')) {
+            inFailedTestCase = true;
+            currentIndent = line.search(/\S/);
+            const nameMatch = trimmed.match(/name="([^"]+)"/);
+            const fullnameMatch = trimmed.match(/fullname="([^"]+)"/);
+            currentTest = {
+                name: nameMatch ? nameMatch[1] : null,
+                fullname: fullnameMatch ? fullnameMatch[1] : null,
+                message: '',
+                stackTrace: '',
+                output: ''
+            };
+            captureStack = false;
+            captureOutput = false;
+            continue;
+        }
+
+        if (inFailedTestCase && currentTest) {
+            // Check for failure message
+            if (trimmed.includes('<message>')) {
+                // Extract content after <message><![CDATA[ on the same line
+                const cdataStart = line.indexOf('<![CDATA[');
+                if (cdataStart !== -1) {
+                    const afterCdataStart = line.substring(cdataStart + 9);
+                    if (afterCdataStart.includes(']]>')) {
+                        // CDATA ends on same line
+                        currentTest.message = afterCdataStart.substring(0, afterCdataStart.indexOf(']]>')).trim();
+                    } else {
+                        // Multi-line CDATA - start with content after <![CDATA[
+                        let content = [];
+                        if (afterCdataStart.trim()) {
+                            content.push(afterCdataStart.trim());
+                        }
+                        // Collect remaining lines until ]]> is found
+                        let j = i + 1;
+                        while (j < lines.length && !lines[j].includes(']]>')) {
+                            content.push(lines[j].trim());
+                            j++;
+                        }
+                        if (j < lines.length && lines[j].includes(']]>')) {
+                            const endContent = lines[j].split(']]>')[0].trim();
+                            if (endContent) {
+                                content.push(endContent);
+                            }
+                        }
+                        currentTest.message = content.join('\n');
+                    }
+                }
+            }
+
+            // Check for stack-trace
+            if (trimmed.includes('<stack-trace>')) {
+                const cdataStart = line.indexOf('<![CDATA[');
+                if (cdataStart !== -1) {
+                    const afterCdataStart = line.substring(cdataStart + 9);
+                    if (afterCdataStart.includes(']]>')) {
+                        currentTest.stackTrace = afterCdataStart.substring(0, afterCdataStart.indexOf(']]>')).trim();
+                    } else {
+                        captureStack = true;
+                        // Start with any content after <![CDATA[ on the same line
+                        if (afterCdataStart.trim()) {
+                            currentTest.stackTrace = afterCdataStart.trim() + '\n';
+                        }
+                    }
+                } else {
+                    captureStack = true;
+                }
+            }
+
+            // Capture stack trace content
+            if (captureStack) {
+                if (trimmed.includes(']]>')) {
+                    const endContent = trimmed.split(']]>')[0].trim();
+                    if (endContent && !endContent.includes('<stack-trace>')) {
+                        currentTest.stackTrace += endContent;
+                    }
+                    captureStack = false;
+                } else if (trimmed.length > 0 && !trimmed.includes('<stack-trace>') && !trimmed.includes('<![CDATA[')) {
+                    currentTest.stackTrace += trimmed + '\n';
+                }
+            }
+
+            // Check for output
+            if (trimmed.includes('<output>')) {
+                const cdataStart = line.indexOf('<![CDATA[');
+                if (cdataStart !== -1) {
+                    const afterCdataStart = line.substring(cdataStart + 9);
+                    if (afterCdataStart.includes(']]>')) {
+                        currentTest.output = afterCdataStart.substring(0, afterCdataStart.indexOf(']]>')).trim();
+                    } else {
+                        captureOutput = true;
+                        if (afterCdataStart.trim()) {
+                            currentTest.output = afterCdataStart.trim() + '\n';
+                        }
+                    }
+                } else {
+                    captureOutput = true;
+                }
+            }
+
+            // Capture output content
+            if (captureOutput) {
+                if (trimmed.includes(']]>')) {
+                    const endContent = trimmed.split(']]>')[0].trim();
+                    if (endContent && !endContent.includes('<output>')) {
+                        currentTest.output += endContent;
+                    }
+                    captureOutput = false;
+                } else if (trimmed.length > 0 && !trimmed.includes('<output>') && !trimmed.includes('<![CDATA[')) {
+                    currentTest.output += trimmed + '\n';
+                }
+            }
+
+            // Extract file from stack trace
+            if (currentTest.stackTrace) {
+                const fileMatch = currentTest.stackTrace.match(/([A-Za-z0-9_]+\.cs):(\d+)/);
+                if (fileMatch) {
+                    filesSet.add(fileMatch[1]);
+                }
+            }
+
+            // End of test case
+            if (trimmed.includes('</test-case>') || (trimmed.startsWith('</') && line.search(/\S/) <= currentIndent)) {
+                if (currentTest.message || currentTest.stackTrace) {
+                    failedTests.push(currentTest);
+                    if (failedTests.length >= maxErrors) break;
+                }
+                inFailedTestCase = false;
+                currentTest = null;
+            }
+        }
+    }
+
+    // Build filtered content
+    let output = [];
+    output.push(`# Unity Test Results - Filtered Output`);
+    output.push(`# Total: ${totalTests} | Passed: ${passedTests} | Failed: ${failedTests.length} | Skipped: ${skippedTests}`);
+    output.push(`# Generated: ${new Date().toISOString()}`);
+    output.push('');
+
+    if (failedTests.length > 0) {
+        output.push(`## FAILED TESTS (${failedTests.length})`);
+        output.push('');
+
+        failedTests.forEach((test, index) => {
+            output.push(`### ${index + 1}. ${test.name || 'Unknown Test'}`);
+            if (test.fullname && test.fullname !== test.name) {
+                output.push(`**Full Name:** \`${test.fullname}\``);
+            }
+            output.push('');
+
+            if (test.message) {
+                output.push('**Error Message:**');
+                output.push('```');
+                output.push(test.message);
+                output.push('```');
+                output.push('');
+            }
+
+            if (showStackTraces && test.stackTrace) {
+                output.push('**Stack Trace:**');
+                output.push('```');
+                output.push(test.stackTrace.trim());
+                output.push('```');
+                output.push('');
+            }
+
+            if (showOutput && test.output) {
+                output.push('**Console Output:**');
+                output.push('```');
+                output.push(test.output.trim());
+                output.push('```');
+                output.push('');
+            }
+
+            output.push('---');
+            output.push('');
+        });
+    } else {
+        output.push('## All tests passed! No failures found.');
+    }
+
+    return {
+        summary: {
+            totalTests,
+            passed: passedTests,
+            failed: failedTests.length,
+            skipped: skippedTests,
+            filteredLines: output.length
+        },
+        errors: failedTests,
+        filteredContent: output.join('\n'),
+        files: Array.from(filesSet).sort()
+    };
+}
+
+/**
  * Filter build log to extract errors and warnings
  */
 function filterBuildLog(logContent, options = {}) {
@@ -178,4 +417,71 @@ console.log('   Errors found:     ' + result.errors.length);
 console.log('   Warnings found:   ' + result.warnings.length);
 console.log('   Filtered lines:   ' + result.summary.filteredLines);
 console.log('   Reduction:        ' + Math.round((1 - result.summary.filteredLines / result.summary.totalLines) * 100) + '%');
-console.log('\n✅ Test completed!');
+console.log('\n✅ Build log test completed!');
+console.log('\n');
+
+// Unity Test Results XML Test
+const unityTestXml = `<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="10" result="Failed" total="10" passed="8" failed="2" inconclusive="0" skipped="0">
+  <test-suite type="TestFixture" name="MeleeCombatTests">
+    <test-case id="1103" name="OnWeaponHitEnemy_AppliesHeadMultiplier" fullname="ActionWeather.Player.Tests.MeleeCombatTests.OnWeaponHitEnemy_AppliesHeadMultiplier" result="Failed">
+      <failure>
+        <message><![CDATA[  Head shot should deal 2.5x damage
+  Expected: 250
+  But was:  0
+]]></message>
+        <stack-trace><![CDATA[at ActionWeather.Player.Tests.MeleeCombatTests.OnWeaponHitEnemy_AppliesHeadMultiplier () [0x00059] in C:\\Projects\\ActionWeather\\Assets\\Scripts\\Player\\Tests\\MeleeCombatTests.cs:292
+]]></stack-trace>
+      </failure>
+      <output><![CDATA[[MeleeAttack] Hit TestEnemy: Base=100, Swing=1x, Purity=1x, HitZone=2,5x = 250
+Player Die!
+]]></output>
+    </test-case>
+    <test-case id="1104" name="OnWeaponHitEnemy_AppliesWeakSpotMultiplier" fullname="ActionWeather.Player.Tests.MeleeCombatTests.OnWeaponHitEnemy_AppliesWeakSpotMultiplier" result="Failed">
+      <failure>
+        <message><![CDATA[  Weak spot should deal 3x damage
+  Expected: 200
+  But was:  0
+]]></message>
+        <stack-trace><![CDATA[at ActionWeather.Player.Tests.MeleeCombatTests.OnWeaponHitEnemy_AppliesWeakSpotMultiplier () [0x00059] in C:\\Projects\\ActionWeather\\Assets\\Scripts\\Player\\Tests\\MeleeCombatTests.cs:307
+]]></stack-trace>
+      </failure>
+    </test-case>
+    <test-case id="1105" name="OnWeaponHitEnemy_BasicDamage" result="Passed"/>
+  </test-suite>
+</test-run>`;
+
+console.log('╔════════════════════════════════════════════════════════════╗');
+console.log('║       Unity Test Results Filter - Test Run                ║');
+console.log('╚════════════════════════════════════════════════════════════╝\n');
+
+console.log('📥 Unity Test XML Input (' + unityTestXml.split('\n').length + ' lines):\n');
+console.log('─'.repeat(60));
+console.log(unityTestXml.trim().substring(0, 500) + '...');
+console.log('─'.repeat(60));
+console.log('\n');
+
+console.log('🚀 Filtering Unity test results...\n');
+
+const unityResult = filterUnityTestResults(unityTestXml, {
+    showStackTraces: true,
+    showOutput: true,
+    maxErrors: 100
+});
+
+console.log('📤 Filtered Unity Test Output:\n');
+console.log('═'.repeat(60));
+console.log(unityResult.filteredContent);
+console.log('═'.repeat(60));
+console.log('\n');
+
+console.log('📊 Unity Test Statistics:');
+console.log('   Total tests:      ' + unityResult.summary.totalTests);
+console.log('   Passed:           ' + unityResult.summary.passed);
+console.log('   Failed:           ' + unityResult.summary.failed);
+console.log('   Skipped:          ' + unityResult.summary.skipped);
+console.log('   Files with errors: ' + unityResult.files.length);
+if (unityResult.files.length > 0) {
+    console.log('   Affected files:   ' + unityResult.files.join(', '));
+}
+console.log('\n✅ Unity test filter completed!');

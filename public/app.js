@@ -16,6 +16,7 @@ const clearBtn = document.getElementById('clearBtn');
 const pasteBtn = document.getElementById('pasteBtn');
 const copyBtn = document.getElementById('copyBtn');
 const saveBtn = document.getElementById('saveBtn');
+const fileInput = document.getElementById('fileInput');
 
 // Options
 const showWarnings = document.getElementById('showWarnings');
@@ -240,15 +241,32 @@ async function filterLog() {
 
             // Show filter stats
             if (result.summary) {
-                const { errorCount, warningCount, totalLines } = result.summary;
-                filterStats.textContent = `Found: ${errorCount} errors, ${warningCount} warnings (from ${totalLines} lines)`;
-                status.textContent = `Filtered successfully! Removed ${totalLines - (errorCount + warningCount)} irrelevant lines.`;
+                // Handle Unity test results format
+                if (result.format === 'unity-test-results' || result.summary.totalTests !== undefined) {
+                    const { totalTests, passed, failed, skipped } = result.summary;
+                    filterStats.textContent = `Tests: ${totalTests} total | ${passed} passed | ${failed} failed | ${skipped} skipped`;
+                    if (failed > 0) {
+                        status.textContent = `Found ${failed} failed test(s) - review and fix!`;
+                    } else {
+                        status.textContent = 'All tests passed!';
+                    }
+                } else {
+                    // Standard build log format
+                    const { errorCount, warningCount, totalLines } = result.summary;
+                    filterStats.textContent = `Found: ${errorCount} errors, ${warningCount} warnings (from ${totalLines} lines)`;
+                    status.textContent = `Filtered successfully! Removed ${totalLines - (errorCount + warningCount)} irrelevant lines.`;
+                }
             } else {
                 filterStats.textContent = 'Filtered successfully!';
                 status.textContent = 'Ready to copy';
             }
 
-            showToast('Log filtered successfully!');
+            // Show specific toast for Unity tests
+            if (result.format === 'unity-test-results') {
+                showToast(`Unity test results: ${result.summary.failed} failures found`);
+            } else {
+                showToast('Log filtered successfully!');
+            }
         } else {
             throw new Error(result.error || 'Filter failed');
         }
@@ -268,6 +286,28 @@ function clearInput() {
     inputLog.value = '';
     updateInputStats();
     status.textContent = 'Input cleared';
+}
+
+/**
+ * Load file and auto-filter
+ */
+function loadFile(file) {
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const content = e.target.result;
+        inputLog.value = content;
+        updateInputStats();
+        status.textContent = `Loaded ${file.name} (${content.split('\n').length} lines)`;
+        showToast(`Loaded: ${file.name}`);
+        // Auto-filter after loading
+        await filterLog();
+    };
+    reader.onerror = () => {
+        showToast('Error reading file!', true);
+    };
+    reader.readAsText(file);
 }
 
 /**
@@ -352,6 +392,13 @@ clearBtn.addEventListener('click', clearInput);
 pasteBtn.addEventListener('click', pasteFromClipboard);
 copyBtn.addEventListener('click', copyToClipboard);
 saveBtn.addEventListener('click', saveToFile);
+
+// File input - load selected file
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        loadFile(e.target.files[0]);
+    }
+});
 
 inputLog.addEventListener('input', updateInputStats);
 

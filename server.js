@@ -16,6 +16,281 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.static('public'));
 
 /**
+ * Check if content is a Unity NUnit test result XML
+ */
+function isUnityTestXml(content) {
+    const trimmed = content.trim();
+    return trimmed.startsWith('<?xml') && trimmed.includes('<test-run') && trimmed.includes('testcasecount');
+}
+
+/**
+ * Parse CDATA content from XML
+ */
+function parseCData(xmlContent, tagName) {
+    const cdataRegex = new RegExp(`<${tagName}[^>]*>\\s*<!\\[CDATA\\[([^\\]]*(?:\\](?!\\])[^\\]]*)*)\\]\\]>\\s*</${tagName}>`, 'gis');
+    const matches = [];
+    let match;
+    while ((match = cdataRegex.exec(xmlContent)) !== null) {
+        matches.push(match[1].trim());
+    }
+    return matches;
+}
+
+/**
+ * Extract test case name from XML element
+ */
+function extractTestName(xmlLine) {
+    const nameMatch = xmlLine.match(/name="([^"]+)"/);
+    return nameMatch ? nameMatch[1] : null;
+}
+
+/**
+ * Extract fullname from XML element
+ */
+function extractFullname(xmlLine) {
+    const fullnameMatch = xmlLine.match(/fullname="([^"]+)"/);
+    return fullnameMatch ? fullnameMatch[1] : null;
+}
+
+/**
+ * Filter Unity NUnit test result XML to extract failed tests
+ * @param {string} xmlContent - Unity test result XML content
+ * @param {object} options - Filter options
+ * @returns {object} Filtered result with stats and content
+ */
+function filterUnityTestResults(xmlContent, options = {}) {
+    const {
+        showStackTraces = true,
+        showOutput = true,
+        maxErrors = 9999
+    } = options;
+
+    const lines = xmlContent.split('\n');
+    const failedTests = [];
+    const filesSet = new Set();
+    let totalTests = 0;
+    let passedTests = 0;
+    let failedTestsCount = 0;
+    let skippedTests = 0;
+
+    // Extract summary from test-run element
+    const summaryMatch = xmlContent.match(/<test-run[^>]*total="(\d+)"[^>]*passed="(\d+)"[^>]*failed="(\d+)"[^>]*skipped="(\d+)"/);
+    if (summaryMatch) {
+        totalTests = parseInt(summaryMatch[1]) || 0;
+        passedTests = parseInt(summaryMatch[2]) || 0;
+        failedTestsCount = parseInt(summaryMatch[3]) || 0;
+        skippedTests = parseInt(summaryMatch[4]) || 0;
+    }
+
+    // Find all failed test-case elements
+    let inFailedTestCase = false;
+    let currentTest = null;
+    let captureStack = false;
+    let captureOutput = false;
+    let currentIndent = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        // Detect start of a failed test case
+        if (trimmed.includes('<test-case') && trimmed.includes('result="Failed"')) {
+            inFailedTestCase = true;
+            currentIndent = line.search(/\S/);
+            currentTest = {
+                name: extractTestName(trimmed),
+                fullname: extractFullname(trimmed),
+                message: '',
+                stackTrace: '',
+                output: ''
+            };
+            captureStack = false;
+            captureOutput = false;
+            continue;
+        }
+
+        if (inFailedTestCase && currentTest) {
+            // Check for failure message
+            if (trimmed.includes('<message>')) {
+                // Extract content after <message><![CDATA[ on the same line
+                const cdataStart = line.indexOf('<![CDATA[');
+                if (cdataStart !== -1) {
+                    const afterCdataStart = line.substring(cdataStart + 9);
+                    if (afterCdataStart.includes(']]>')) {
+                        // CDATA ends on same line
+                        currentTest.message = afterCdataStart.substring(0, afterCdataStart.indexOf(']]>')).trim();
+                    } else {
+                        // Multi-line CDATA - start with content after <![CDATA[
+                        let content = [];
+                        if (afterCdataStart.trim()) {
+                            content.push(afterCdataStart.trim());
+                        }
+                        // Collect remaining lines until ]]> is found
+                        let j = i + 1;
+                        while (j < lines.length && !lines[j].includes(']]>')) {
+                            content.push(lines[j].trim());
+                            j++;
+                        }
+                        if (j < lines.length && lines[j].includes(']]>')) {
+                            const endContent = lines[j].split(']]>')[0].trim();
+                            if (endContent) {
+                                content.push(endContent);
+                            }
+                        }
+                        currentTest.message = content.join('\n');
+                    }
+                }
+            }
+
+            // Check for stack-trace
+            if (trimmed.includes('<stack-trace>')) {
+                const cdataStart = line.indexOf('<![CDATA[');
+                if (cdataStart !== -1) {
+                    const afterCdataStart = line.substring(cdataStart + 9);
+                    if (afterCdataStart.includes(']]>')) {
+                        currentTest.stackTrace = afterCdataStart.substring(0, afterCdataStart.indexOf(']]>')).trim();
+                    } else {
+                        captureStack = true;
+                        // Start with any content after <![CDATA[ on the same line
+                        if (afterCdataStart.trim()) {
+                            currentTest.stackTrace = afterCdataStart.trim() + '\n';
+                        }
+                    }
+                } else {
+                    captureStack = true;
+                }
+            }
+
+            // Capture stack trace content
+            if (captureStack) {
+                if (trimmed.includes(']]>')) {
+                    const endContent = trimmed.split(']]>')[0].trim();
+                    if (endContent && !endContent.includes('<stack-trace>')) {
+                        currentTest.stackTrace += endContent;
+                    }
+                    captureStack = false;
+                } else if (trimmed.length > 0 && !trimmed.includes('<stack-trace>') && !trimmed.includes('<![CDATA[')) {
+                    currentTest.stackTrace += trimmed + '\n';
+                }
+            }
+
+            // Check for output
+            if (trimmed.includes('<output>')) {
+                const cdataStart = line.indexOf('<![CDATA[');
+                if (cdataStart !== -1) {
+                    const afterCdataStart = line.substring(cdataStart + 9);
+                    if (afterCdataStart.includes(']]>')) {
+                        currentTest.output = afterCdataStart.substring(0, afterCdataStart.indexOf(']]>')).trim();
+                    } else {
+                        captureOutput = true;
+                        if (afterCdataStart.trim()) {
+                            currentTest.output = afterCdataStart.trim() + '\n';
+                        }
+                    }
+                } else {
+                    captureOutput = true;
+                }
+            }
+
+            // Capture output content
+            if (captureOutput) {
+                if (trimmed.includes(']]>')) {
+                    const endContent = trimmed.split(']]>')[0].trim();
+                    if (endContent && !endContent.includes('<output>')) {
+                        currentTest.output += endContent;
+                    }
+                    captureOutput = false;
+                } else if (trimmed.length > 0 && !trimmed.includes('<output>') && !trimmed.includes('<![CDATA[')) {
+                    currentTest.output += trimmed + '\n';
+                }
+            }
+
+            // Extract file from stack trace (e.g., "MeleeCombatTests.cs:292")
+            if (currentTest.stackTrace) {
+                const fileMatch = currentTest.stackTrace.match(/([A-Za-z0-9_]+\.cs):(\d+)/);
+                if (fileMatch) {
+                    filesSet.add(fileMatch[1]);
+                }
+            }
+
+            // End of test case (closing tag at same or lower indent)
+            if (trimmed.includes('</test-case>') || (trimmed.startsWith('</') && line.search(/\S/) <= currentIndent)) {
+                if (currentTest.message || currentTest.stackTrace) {
+                    failedTests.push(currentTest);
+                    if (failedTests.length >= maxErrors) {
+                        break;
+                    }
+                }
+                inFailedTestCase = false;
+                currentTest = null;
+            }
+        }
+    }
+
+    // Build filtered content
+    let output = [];
+    output.push(`# Unity Test Results - Filtered Output`);
+    output.push(`# Total: ${totalTests} | Passed: ${passedTests} | Failed: ${failedTests.length} | Skipped: ${skippedTests}`);
+    output.push(`# Generated: ${new Date().toISOString()}`);
+    output.push('');
+
+    if (failedTests.length > 0) {
+        output.push(`## FAILED TESTS (${failedTests.length})`);
+        output.push('');
+
+        failedTests.forEach((test, index) => {
+            output.push(`### ${index + 1}. ${test.name || 'Unknown Test'}`);
+            if (test.fullname && test.fullname !== test.name) {
+                output.push(`**Full Name:** \`${test.fullname}\``);
+            }
+            output.push('');
+
+            if (test.message) {
+                output.push('**Error Message:**');
+                output.push('```');
+                output.push(test.message);
+                output.push('```');
+                output.push('');
+            }
+
+            if (showStackTraces && test.stackTrace) {
+                output.push('**Stack Trace:**');
+                output.push('```');
+                output.push(test.stackTrace.trim());
+                output.push('```');
+                output.push('');
+            }
+
+            if (showOutput && test.output) {
+                output.push('**Console Output:**');
+                output.push('```');
+                output.push(test.output.trim());
+                output.push('```');
+                output.push('');
+            }
+
+            output.push('---');
+            output.push('');
+        });
+    } else {
+        output.push('## All tests passed! No failures found.');
+    }
+
+    return {
+        summary: {
+            totalTests,
+            passed: passedTests,
+            failed: failedTests.length,
+            skipped: skippedTests,
+            filteredLines: output.length
+        },
+        errors: failedTests,
+        filteredContent: output.join('\n'),
+        files: Array.from(filesSet).sort()
+    };
+}
+
+/**
  * Filter build log to extract errors and warnings
  * @param {string} logContent - Raw build log content
  * @param {object} options - Filter options
@@ -278,13 +553,27 @@ app.get('/', (req, res) => {
 
 // API: Filter log
 app.post('/api/filter', (req, res) => {
-    const { logContent, format, showWarnings, contextLines, maxErrors, maxWarnings, fileFilter, fileFilters } = req.body;
+    const { logContent, format, showWarnings, contextLines, maxErrors, maxWarnings, fileFilter, fileFilters, showStackTraces, showOutput } = req.body;
 
     if (!logContent) {
         return res.status(400).json({ error: 'logContent is required' });
     }
 
     try {
+        // Auto-detect Unity test result XML
+        if (isUnityTestXml(logContent)) {
+            const unityResult = filterUnityTestResults(logContent, {
+                showStackTraces: showStackTraces !== false,
+                showOutput: showOutput !== false,
+                maxErrors: parseInt(maxErrors) || 9999
+            });
+
+            return res.json({
+                ...unityResult,
+                format: 'unity-test-results'
+            });
+        }
+
         const options = {
             showWarnings: showWarnings !== false,
             contextLines: parseInt(contextLines) || 0,

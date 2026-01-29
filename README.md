@@ -1,6 +1,6 @@
 # Build Log Filter GUI
 
-A web-based GUI tool for filtering UE5/Visual Studio build logs before sharing with AI assistants.
+A web-based GUI tool for filtering UE5/Visual Studio build logs and Unity test results before sharing with AI assistants.
 
 **Problem:** Build logs can be 3000+ lines (45,000+ tokens) - too large for AI context windows.
 **Solution:** Filter to only errors + warnings, reducing to ~100 lines (1,500 tokens).
@@ -10,6 +10,7 @@ A web-based GUI tool for filtering UE5/Visual Studio build logs before sharing w
 ## Features
 
 - 📋 **Paste & Filter:** Paste raw build log, get filtered output instantly
+- 🎮 **Unity Test Results:** Auto-detects and filters Unity NUnit XML test results
 - 🎛️ **Configurable:** Toggle warnings, adjust context lines, choose format
 - 💾 **Save to File:** Export filtered log as `.txt`
 - 🌐 **Web Interface:** Clean dark-themed UI
@@ -41,11 +42,18 @@ Navigate to: **http://localhost:3456**
 
 ## Usage
 
+### For Build Logs:
 1. **Copy** your build log from Visual Studio Output window
 2. **Paste** into the Input panel (or click "📋 Paste" button)
 3. **Click** "🚀 Filter Log" (or press Ctrl+Enter)
 4. **Copy** the filtered output (or click "📋 Copy")
 5. **Paste** into Claude Code or any AI assistant
+
+### For Unity Test Results:
+1. **Copy** your Unity test result XML content (or paste the file directly)
+2. **Paste** into the Input panel
+3. The tool auto-detects Unity test format and extracts failed tests
+4. **Review** the filtered output showing only failed tests with error messages, stack traces, and console output
 
 ---
 
@@ -72,6 +80,7 @@ Navigate to: **http://localhost:3456**
 
 ## Error Patterns Detected
 
+### Build Log Patterns
 | Pattern | Example |
 |---------|---------|
 | MSVC errors | `error C2065: 'MyFunction': undeclared identifier` |
@@ -81,6 +90,14 @@ Navigate to: **http://localhost:3456**
 | SetEnv error | `SetEnv task failed unexpectedly` |
 | Include errors | `Cannot open include file: 'LCCharacterBase.h'` |
 | Warnings | `warning C4101: 'unusedVar': unreferenced local variable` |
+
+### Unity Test Results (Auto-detected)
+The tool automatically detects Unity NUnit test result XML files and extracts:
+- Failed test names and full names
+- Error messages from CDATA sections
+- Stack traces with file locations
+- Console output during test execution
+- Summary statistics (total, passed, failed, skipped)
 
 ---
 

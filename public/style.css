@@ -364,6 +364,32 @@ button {
     font-size: 1.1rem;
 }
 
+/* File input label as button */
+.file-input-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+.file-input-label:hover {
+    background: var(--border);
+    transform: translateY(-1px);
+}
+
+.file-input-label:active {
+    transform: translateY(0);
+}
+
 /* Footer */
 footer {
     text-align: center;
