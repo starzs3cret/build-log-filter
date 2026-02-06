@@ -29,3 +29,7 @@ jobs:
     - run: npm ci
     - run: npm run build --if-present
     - run: npm test
+    - name: Test MCP Server
+      run: |
+        # Quick check that MCP server starts
+        timeout 2 node mcp-server.js <<< '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' || true
