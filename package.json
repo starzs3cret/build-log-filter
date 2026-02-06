@@ -8,11 +8,18 @@
     "dev": "node server.js --dev",
     "test": "node test-filter.js"
   },
-  "keywords": ["build-log", "ue5", "unreal", "visual-studio", "log-filter"],
+  "keywords": [
+    "build-log",
+    "ue5",
+    "unreal",
+    "visual-studio",
+    "log-filter"
+  ],
   "author": "Last Courier Project",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5"
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
   }
 }

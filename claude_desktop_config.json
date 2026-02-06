@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "build-log-filter": {
+      "command": "node",
+      "args": [
+        "/root/build-log-filter/mcp-server.js"
+      ],
+      "env": {},
+      "description": "Filter build logs and Unity test results for AI consumption"
+    }
+  }
+}

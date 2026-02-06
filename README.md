@@ -21,22 +21,65 @@ A web-based GUI tool for filtering UE5/Visual Studio build logs and Unity test r
 
 ## Quick Start
 
-### 1. Install Dependencies
+### Web GUI (Browser)
 
 ```bash
 cd tools/build-log-filter
 npm install
+npm start
+# Open http://localhost:3456
 ```
 
-### 2. Start the Server
+### CLI Scripts
 
 ```bash
-npm start
+./ai-info.sh                    # Get project info
+./filter-unity-results.sh       # Filter Unity test results XML
+./unity-test-ai.sh              # Run Unity tests + filter
+./unity-ci.sh                   # Run EditMode + PlayMode tests + AI output
 ```
 
-### 3. Open in Browser
+### MCP Integration (AI Assistants)
 
-Navigate to: **http://localhost:3456**
+```bash
+./install-mcp.sh                # Install MCP server for Claude/Cursor
+```
+
+See [MCP_README.md](./MCP_README.md) for details.
+
+### Unity CI Usage
+
+Run both EditMode and PlayMode tests with filtered AI output:
+
+```bash
+# Auto-detect Unity and run tests
+./unity-ci.sh
+
+# Or specify project path
+./unity-ci.sh /path/to/unity/project
+
+# Or manually set Unity path
+export UNITY=/opt/Unity/Editor/Unity
+./unity-ci.sh
+```
+
+**Unity Auto-Detection** - The script searches for Unity in:
+- `$UNITY` environment variable
+- `which unity` command
+- `/opt/Unity/Editor/Unity`
+- `~/Unity/Hub/Editor/*/Editor/Unity`
+- `~/Applications/Unity/Hub/Editor/*/Editor/Unity`
+- `/Applications/Unity/Hub/Editor/*/Unity.app`
+- `/mnt/c/Program Files/Unity/Hub/Editor/*/Editor/Unity.exe` (WSL)
+
+Can't find Unity? Run `./find-unity.sh` to diagnose.
+
+**What it does:**
+1. Run EditMode tests → `TestResults_EditMode.xml`
+2. Run PlayMode tests → `TestResults_PlayMode.xml`
+3. Filter results to show only failed tests
+4. Output formatted markdown for AI
+5. Return exit code 0 if all passed, 1 if any failed
 
 ---
 
