@@ -391,11 +391,21 @@ const publicPath = process.env.VERCEL
 
 // Explicitly serve static files (needed for Vercel serverless)
 app.get('/style.css', (req, res) => {
-  res.sendFile(path.join(publicPath, 'style.css'));
+  const filePath = path.join(publicPath, 'style.css');
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'File not found', path: filePath, cwd: process.cwd() });
+  }
+  res.setHeader('Content-Type', 'text/css');
+  res.sendFile(filePath);
 });
 
 app.get('/app.js', (req, res) => {
-  res.sendFile(path.join(publicPath, 'app.js'));
+  const filePath = path.join(publicPath, 'app.js');
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'File not found', path: filePath, cwd: process.cwd() });
+  }
+  res.setHeader('Content-Type', 'application/javascript');
+  res.sendFile(filePath);
 });
 
 app.get('/', (req, res) => {
@@ -407,7 +417,10 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     server: 'build-log-filter',
     version: '1.0.0',
-    features: ['web-gui', 'mcp-http']
+    features: ['web-gui', 'mcp-http'],
+    publicPath: publicPath,
+    cwd: process.cwd(),
+    vercel: process.env.VERCEL || false
   });
 });
 
