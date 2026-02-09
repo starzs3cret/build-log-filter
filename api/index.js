@@ -385,8 +385,9 @@ function filterBuildLog(logContent, options = {}) {
 // ==================== Web API Routes ====================
 
 // Determine public path based on environment
+// On Vercel, included files are relative to the function
 const publicPath = process.env.VERCEL 
-  ? path.join(process.cwd(), 'public')
+  ? path.join(__dirname, '..', 'public')
   : path.join(__dirname, '../public');
 
 // Explicitly serve static files (needed for Vercel serverless)
