@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js --dev",
-    "test": "node test-filter.js"
+    "test": "node test-filter.js",
+    "mcp": "node mcp-server.js",
+    "mcp:http": "node mcp-http-server.js",
+    "mcp:http:prod": "node mcp-http-server.js --port 80"
   },
   "keywords": [
     "build-log",

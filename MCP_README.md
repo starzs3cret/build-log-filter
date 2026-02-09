@@ -18,6 +18,8 @@ chmod +x install-mcp.sh
 
 ### 2. Manual Configuration
 
+#### Option A: Stdio Transport (Default)
+
 Add to your Claude Desktop config (`~/.config/claude/claude_desktop_config.json` or `~/Library/Application Support/Claude/claude_desktop_config.json`):
 
 ```json
@@ -31,6 +33,34 @@ Add to your Claude Desktop config (`~/.config/claude/claude_desktop_config.json`
   }
 }
 ```
+
+#### Option B: HTTP Transport
+
+For remote connections or when running as a service:
+
+```bash
+# Start the HTTP server
+npm run mcp:http
+# or
+node mcp-http-server.js --port 3000
+```
+
+Then configure your MCP client to use HTTP:
+
+```json
+{
+  "mcpServers": {
+    "build-log-filter": {
+      "url": "http://localhost:3000/mcp",
+      "description": "Filter build logs and Unity test results (HTTP)"
+    }
+  }
+}
+```
+
+Environment variables for HTTP server:
+- `MCP_HTTP_PORT` - Server port (default: 3000)
+- `MCP_HTTP_HOST` - Server host (default: 127.0.0.1)
 
 ### 3. Restart Claude Desktop
 
@@ -207,12 +237,36 @@ node /root/build-log-filter/mcp-server.js
 
 ## Other MCP Clients
 
-The MCP server uses stdio transport, so it works with any MCP-compatible client:
+The MCP server supports both **stdio** and **HTTP** transports:
 
+### Stdio Transport
+Works with any MCP-compatible client:
 - Claude Desktop
 - Claude Code CLI
 - Cursor (with MCP support)
 - Any custom MCP client
+
+### HTTP Transport
+For remote connections or web-based clients:
+
+```bash
+# Start HTTP server
+node mcp-http-server.js
+
+# Custom port
+node mcp-http-server.js --port 8080
+```
+
+**HTTP Endpoints:**
+- `POST /mcp` - MCP protocol endpoint
+- `GET /health` - Health check
+
+**Connecting via HTTP:**
+```javascript
+// Example: Using with an HTTP-capable MCP client
+const client = new MCPClient();
+await client.connect("http://localhost:3000/mcp");
+```
 
 ## License
 
