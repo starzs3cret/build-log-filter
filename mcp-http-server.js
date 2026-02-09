@@ -546,14 +546,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // ==================== HTTP Server Setup ====================
 
 async function main() {
-  // Create Express app with MCP configuration
+  // Create Express app with MCP configuration (includes JSON body parser)
   const app = createMcpExpressApp({ host: HOST });
   
   // Enable CORS for all origins (configure as needed)
   app.use(cors());
-  
-  // Parse JSON body
-  app.use(express.json({ limit: '50mb' }));
   
   // Health check endpoint
   app.get('/health', (req, res) => {
@@ -565,27 +562,44 @@ async function main() {
     });
   });
   
-  // Create HTTP transport
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => generateSessionId(),
-  });
-  
-  // Connect MCP server to HTTP transport
-  await server.connect(transport);
-  
   // Handle MCP requests on /mcp endpoint
-  app.all('/mcp', async (req, res) => {
+  // In stateless mode, create a new transport for each request
+  app.post('/mcp', async (req, res) => {
     try {
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined, // Stateless mode
+      });
+      
+      await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
+      
+      res.on('close', () => {
+        transport.close();
+      });
     } catch (error) {
       console.error('Error handling MCP request:', error);
       if (!res.headersSent) {
         res.status(500).json({
-          error: 'Internal server error',
-          message: error.message
+          jsonrpc: '2.0',
+          error: {
+            code: -32603,
+            message: 'Internal server error'
+          },
+          id: null
         });
       }
     }
+  });
+  
+  app.get('/mcp', async (req, res) => {
+    res.status(405).json({
+      jsonrpc: '2.0',
+      error: {
+        code: -32000,
+        message: 'Method not allowed. Use POST for MCP requests.'
+      },
+      id: null
+    });
   });
   
   // Start server

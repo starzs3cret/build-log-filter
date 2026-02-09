@@ -24,9 +24,11 @@ const PORT = process.env.PORT || 3456;
 // Enable CORS
 app.use(cors());
 
-// Middleware
-app.use(express.json({ limit: '50mb' }));
+// Serve static files
 app.use(express.static(path.join(__dirname, '../public')));
+
+// Parse JSON body for API routes
+app.use('/api', express.json({ limit: '50mb' }));
 
 // ==================== Filter Functions ====================
 
@@ -732,25 +734,44 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 // ==================== MCP HTTP Transport ====================
 
-const mcpTransport = new StreamableHTTPServerTransport({
-  sessionIdGenerator: undefined, // Stateless mode for serverless
-});
-
-mcpServer.connect(mcpTransport).catch(console.error);
-
-// MCP endpoint
-app.all('/mcp', async (req, res) => {
+// Handle MCP requests on /mcp endpoint
+// In stateless mode, create a new transport for each request
+app.post('/mcp', async (req, res) => {
   try {
-    await mcpTransport.handleRequest(req, res, req.body);
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined, // Stateless mode for serverless
+    });
+    
+    await mcpServer.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+    
+    res.on('close', () => {
+      transport.close();
+    });
   } catch (error) {
     console.error('MCP request error:', error);
     if (!res.headersSent) {
       res.status(500).json({
-        error: 'Internal server error',
-        message: error.message
+        jsonrpc: '2.0',
+        error: {
+          code: -32603,
+          message: 'Internal server error'
+        },
+        id: null
       });
     }
   }
+});
+
+app.get('/mcp', async (req, res) => {
+  res.status(405).json({
+    jsonrpc: '2.0',
+    error: {
+      code: -32000,
+      message: 'Method not allowed. Use POST for MCP requests.'
+    },
+    id: null
+  });
 });
 
 // ==================== Start Server ====================
