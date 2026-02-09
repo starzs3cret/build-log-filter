@@ -24,9 +24,6 @@ const PORT = process.env.PORT || 3456;
 // Enable CORS
 app.use(cors());
 
-// Serve static files
-app.use(express.static(path.join(__dirname, '../public')));
-
 // Parse JSON body for API routes
 app.use('/api', express.json({ limit: '50mb' }));
 
@@ -387,8 +384,22 @@ function filterBuildLog(logContent, options = {}) {
 
 // ==================== Web API Routes ====================
 
+// Determine public path based on environment
+const publicPath = process.env.VERCEL 
+  ? path.join(process.cwd(), 'public')
+  : path.join(__dirname, '../public');
+
+// Explicitly serve static files (needed for Vercel serverless)
+app.get('/style.css', (req, res) => {
+  res.sendFile(path.join(publicPath, 'style.css'));
+});
+
+app.get('/app.js', (req, res) => {
+  res.sendFile(path.join(publicPath, 'app.js'));
+});
+
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/index.html'));
+  res.sendFile(path.join(publicPath, 'index.html'));
 });
 
 app.get('/api/health', (req, res) => {
