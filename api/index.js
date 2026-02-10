@@ -31,7 +31,7 @@ app.use('/api', express.json({ limit: '50mb' }));
 
 function isUnityTestXml(content) {
   const trimmed = content.trim();
-  return trimmed.startsWith('<?xml') && trimmed.includes('<test-run') && trimmed.includes('testcasecount');
+  return trimmed.startsWith('<?xml') && trimmed.includes('<test-run') && (trimmed.includes('testcasecount') || trimmed.includes('<test-case'));
 }
 
 function parseCData(xmlContent, tagName) {
