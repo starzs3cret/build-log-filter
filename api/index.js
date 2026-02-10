@@ -427,23 +427,24 @@ app.get('/api/health', (req, res) => {
 
 app.post('/api/filter', (req, res) => {
   try {
-    const { content, options = {} } = req.body;
+    const { content, logContent, options = {} } = req.body;
+    const finalContent = content || logContent;
     
-    if (!content) {
+    if (!finalContent) {
       return res.status(400).json({ error: 'No content provided' });
     }
 
-    const isUnity = isUnityTestXml(content);
+    const isUnity = isUnityTestXml(finalContent);
     let result;
 
     if (isUnity) {
-      result = filterUnityTestResults(content, {
+      result = filterUnityTestResults(finalContent, {
         showStackTraces: options.showStackTraces !== false,
         showOutput: options.showOutput !== false,
         maxErrors: options.maxErrors || 9999
       });
     } else {
-      result = filterBuildLog(content, {
+      result = filterBuildLog(finalContent, {
         showWarnings: options.showWarnings !== false,
         contextLines: options.contextLines || 0,
         maxErrors: options.maxErrors || 9999,

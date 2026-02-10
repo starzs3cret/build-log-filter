@@ -210,7 +210,7 @@ async function filterLog() {
     status.textContent = 'Filtering...';
 
     const options = {
-        logContent,
+        content: logContent,
         format: formatSelect.value,
         showWarnings: showWarnings.checked,
         contextLines: useContext.checked ? contextLines.value : 0,
