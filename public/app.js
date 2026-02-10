@@ -147,7 +147,7 @@ function debouncedFilter() {
     clearTimeout(autoFilterTimer);
     autoFilterTimer = setTimeout(() => {
         filterLog();
-    }, 500); // Wait 500ms after user stops typing/changing
+    }, 800); // Wait 800ms after user stops typing/changing
 }
 
 /**
@@ -400,16 +400,21 @@ fileInput.addEventListener('change', (e) => {
     }
 });
 
-inputLog.addEventListener('input', updateInputStats);
+inputLog.addEventListener('input', () => {
+    updateInputStats();
+    if (inputLog.value.trim()) {
+        debouncedFilter();
+    }
+});
 
-// Auto-filter when text is pasted (Ctrl+V)
+// Extra boost for paste events to ensure stats and filter update immediately after content lands
 inputLog.addEventListener('paste', () => {
     setTimeout(() => {
         updateInputStats();
         if (inputLog.value.trim()) {
             debouncedFilter();
         }
-    }, 10); // Small delay to let the paste complete
+    }, 100); // 100ms delay for large logs
 });
 
 // Update context state and auto-filter
