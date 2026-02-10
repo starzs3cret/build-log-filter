@@ -250,6 +250,24 @@ nodemon server.js
 
 ---
 
+## Deployment
+
+### Vercel Deployment
+
+This project is configured for deployment on Vercel. It includes a combined server (`api/index.js`) that serves both the Web GUI and the MCP HTTP endpoints.
+
+#### GitHub Actions Setup
+
+To enable automatic deployment via GitHub Actions, add the following secrets to your GitHub repository:
+
+1. `VERCEL_TOKEN`: Your Vercel Personal Access Token.
+2. `VERCEL_ORG_ID`: Your Vercel Team ID or User ID (`team_...`).
+3. `VERCEL_PROJECT_ID`: Your Vercel Project ID (`prj_...`).
+
+The deployment workflow is defined in `.github/workflows/deploy.yml`.
+
+---
+
 ## License
 
 MIT
