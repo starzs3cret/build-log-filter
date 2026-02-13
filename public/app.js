@@ -11,7 +11,6 @@ const filterStats = document.getElementById('filterStats');
 const status = document.getElementById('status');
 
 // Buttons
-const filterBtn = document.getElementById('filterBtn');
 const clearBtn = document.getElementById('clearBtn');
 const pasteBtn = document.getElementById('pasteBtn');
 const copyBtn = document.getElementById('copyBtn');
@@ -205,8 +204,6 @@ async function filterLog() {
     }
 
     // Show loading state
-    filterBtn.disabled = true;
-    filterBtn.classList.add('filtering');
     status.textContent = 'Filtering...';
 
     const options = {
@@ -273,9 +270,6 @@ async function filterLog() {
     } catch (error) {
         showToast(`Error: ${error.message}`, true);
         status.textContent = 'Filter failed - try again';
-    } finally {
-        filterBtn.disabled = false;
-        filterBtn.classList.remove('filtering');
     }
 }
 
@@ -387,7 +381,6 @@ function updateContextState() {
 }
 
 // Event Listeners
-filterBtn.addEventListener('click', filterLog);
 clearBtn.addEventListener('click', clearInput);
 pasteBtn.addEventListener('click', pasteFromClipboard);
 copyBtn.addEventListener('click', copyToClipboard);
@@ -400,21 +393,14 @@ fileInput.addEventListener('change', (e) => {
     }
 });
 
-inputLog.addEventListener('input', () => {
-    updateInputStats();
-    if (inputLog.value.trim()) {
-        debouncedFilter();
-    }
+// Click input area to paste from clipboard and auto-filter
+inputLog.addEventListener('click', () => {
+    pasteFromClipboard();
 });
 
-// Extra boost for paste events to ensure stats and filter update immediately after content lands
-inputLog.addEventListener('paste', () => {
-    setTimeout(() => {
-        updateInputStats();
-        if (inputLog.value.trim()) {
-            debouncedFilter();
-        }
-    }, 100); // 100ms delay for large logs
+// Click output area to copy to clipboard
+outputLog.addEventListener('click', () => {
+    copyToClipboard();
 });
 
 // Update context state and auto-filter
@@ -448,12 +434,6 @@ clearFileFilterBtn.addEventListener('click', clearFileFilter);
 
 // Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
-    // Ctrl+Enter to filter
-    if (e.ctrlKey && e.key === 'Enter') {
-        e.preventDefault();
-        filterLog();
-    }
-
     // Ctrl+Shift+C to copy output
     if (e.ctrlKey && e.shiftKey && e.key === 'C') {
         e.preventDefault();
@@ -473,4 +453,4 @@ updateInputStats();
 updateOutputStats();
 
 // Welcome message
-status.textContent = 'Paste your build log - auto-filters instantly!';
+status.textContent = 'Click input area to paste, output area to copy';
