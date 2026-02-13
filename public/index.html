@@ -73,15 +73,11 @@
                     </div>
                     <textarea
                         id="inputLog"
-                        placeholder="Paste your Visual Studio or UE5 build log here...
-It will auto-filter instantly!
+                        readonly
+                        placeholder="Click here to paste from clipboard...
 
-Example:
-> Build started...
-> LCCharacterBase.cpp
-> error C2065: 'ULCStaminaComponent': undeclared identifier
-> warning C4101: 'unusedVar': unreferenced local variable
-> Build FAILED."
+Input is read-only for security.
+Click anywhere in this area to paste & filter immediately."
                         spellcheck="false"
                     ></textarea>
                     <div class="panel-footer">
@@ -100,9 +96,9 @@ Example:
                     </div>
                     <textarea
                         id="outputLog"
-                        placeholder="Filtered output will appear here...
-Ready to paste into Claude Code or any AI assistant."
                         readonly
+                        placeholder="Filtered output will appear here...
+Click anywhere to copy to clipboard."
                         spellcheck="false"
                     ></textarea>
                     <div class="panel-footer">
@@ -112,13 +108,10 @@ Ready to paste into Claude Code or any AI assistant."
                 </div>
             </div>
 
-            <!-- Action Bar -->
+            <!-- Status Bar -->
             <div class="action-bar">
-                <button id="filterBtn" class="btn-large btn-primary">
-                    🚀 Filter Log
-                </button>
                 <div class="action-info">
-                    <span id="status">Ready to filter</span>
+                    <span id="status">Click input area to paste, output area to copy</span>
                 </div>
             </div>
         </main>
